@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Gmail API Debug Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        .log { background: #f5f5f5; padding: 10px; margin: 10px 0; border-radius: 3px; font-family: monospace; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+        .error { color: red; }
+        .success { color: green; }
+    </style>
+</head>
+<body>
+    <h1>Gmail API Debug Test</h1>
+    
+    <div class="section">
+        <h3>Authentication Status</h3>
+        <div id="auth-status">Checking...</div>
+        <button onclick="checkAuth()">Check Auth</button>
+        <button onclick="login()">Login with Google</button>
+        <button onclick="logout()">Logout</button>
+    </div>
+
+    <div class="section">
+        <h3>API Tests</h3>
+        <button onclick="testMessages()">Test Messages API</button>
+        <button onclick="testLabels()">Test Labels API</button>
+        <button onclick="clearLogs()">Clear Logs</button>
+        <div id="api-logs"></div>
+    </div>
+
+    <div class="section">
+        <h3>Debug Info</h3>
+        <div id="debug-info">Click "Check Auth" to see debug info</div>
+    </div>
+
+    <script>
+        function log(message, isError = false) {
+            const logs = document.getElementById('api-logs');
+            const div = document.createElement('div');
+            div.className = isError ? 'log error' : 'log';
+            div.innerHTML = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logs.appendChild(div);
+            logs.scrollTop = logs.scrollHeight;
+        }
+
+        async function checkAuth() {
+            try {
+                const response = await fetch('/api/auth/session');
+                const session = await response.json();
+                
+                const authStatus = document.getElementById('auth-status');
+                const debugInfo = document.getElementById('debug-info');
+                
+                if (session && session.user) {
+                    authStatus.innerHTML = `<span class="success">✓ Logged in as ${session.user.email}</span>`;
+                    debugInfo.innerHTML = `
+                        <strong>Session Debug Info:</strong><br>
+                        User: ${session.user.email}<br>
+                        Has Access Token: ${!!session.accessToken}<br>
+                        Access Token Length: ${session.accessToken?.length || 0}<br>
+                        Has Refresh Token: ${!!session.refreshToken}<br>
+                        Refresh Token Length: ${session.refreshToken?.length || 0}<br>
+                        Expires: ${session.expires || 'N/A'}
+                    `;
+                } else {
+                    authStatus.innerHTML = '<span class="error">✗ Not authenticated</span>';
+                    debugInfo.innerHTML = '<strong>No session found</strong>';
+                }
+            } catch (error) {
+                log(`Auth check failed: ${error.message}`, true);
+            }
+        }
+
+        function login() {
+            window.location.href = '/api/auth/signin/google';
+        }
+
+        function logout() {
+            window.location.href = '/api/auth/signout';
+        }
+
+        async function testMessages() {
+            log('Testing /api/gmail/messages...');
+            try {
+                const response = await fetch('/api/gmail/messages');
+                const responseText = await response.text();
+                
+                log(`Status: ${response.status} ${response.statusText}`);
+                log(`Response: ${responseText}`);
+                
+                if (response.ok) {
+                    try {
+                        const data = JSON.parse(responseText);
+                        log(`✓ Success! Found ${data.messages?.length || 0} messages`);
+                    } catch (e) {
+                        log(`Response is not valid JSON: ${e.message}`, true);
+                    }
+                } else {
+                    log(`✗ API Error: ${response.status}`, true);
+                }
+            } catch (error) {
+                log(`Network error: ${error.message}`, true);
+            }
+        }
+
+        async function testLabels() {
+            log('Testing /api/gmail/labels...');
+            try {
+                const response = await fetch('/api/gmail/labels');
+                const responseText = await response.text();
+                
+                log(`Status: ${response.status} ${response.statusText}`);
+                log(`Response: ${responseText}`);
+                
+                if (response.ok) {
+                    try {
+                        const data = JSON.parse(responseText);
+                        log(`✓ Success! Found ${data.labels?.length || 0} labels`);
+                    } catch (e) {
+                        log(`Response is not valid JSON: ${e.message}`, true);
+                    }
+                } else {
+                    log(`✗ API Error: ${response.status}`, true);
+                }
+            } catch (error) {
+                log(`Network error: ${error.message}`, true);
+            }
+        }
+
+        function clearLogs() {
+            document.getElementById('api-logs').innerHTML = '';
+        }
+
+        // Auto-check auth on load
+        window.onload = () => checkAuth();
+    </script>
+</body>
+</html>

@@ -6,7 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "dev:helper": "node dev-helper.js",
+    "dev:start": "node dev-helper.js start",
+    "dev:stop": "node dev-helper.js stop",
+    "dev:status": "node dev-helper.js status",
+    "dev:debug": "node dev-helper.js debug"
   },
   "dependencies": {
     "googleapis": "^171.4.0",

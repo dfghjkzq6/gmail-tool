@@ -20,11 +20,31 @@ export default function Home() {
 
       <hr />
 
-      <button onClick={() => fetch("/api/gmail/messages").then(r => r.json()).then(console.log)}>
+      <button onClick={() => fetch("/api/gmail/messages")
+        .then(r => {
+          if (!r.ok) {
+            return r.text().then(text => {
+              throw new Error(`HTTP ${r.status}: ${text}`);
+            });
+          }
+          return r.json();
+        })
+        .then(console.log)
+        .catch(console.error)}>
         Fetch Emails (check console)
       </button>
 
-      <button onClick={() => fetch("/api/gmail/labels").then(r => r.json()).then(console.log)}>
+      <button onClick={() => fetch("/api/gmail/labels")
+        .then(r => {
+          if (!r.ok) {
+            return r.text().then(text => {
+              throw new Error(`HTTP ${r.status}: ${text}`);
+            });
+          }
+          return r.json();
+        })
+        .then(console.log)
+        .catch(console.error)}>
         Fetch Labels (check console)
       </button>
     </div>
