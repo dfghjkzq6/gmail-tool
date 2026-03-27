@@ -1,5 +1,6 @@
 import NextAuth from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
+import { db } from "@/lib/db";
 
 export const authOptions = {
   providers: [
@@ -16,16 +17,44 @@ export const authOptions = {
     }),
   ],
   callbacks: {
-    async jwt({ token, account }) {
+    async jwt({ token, account, user }) {
       if (account) {
         token.accessToken = account.access_token;
         token.refreshToken = account.refresh_token;
+        
+        // Store user in Neon database
+        if (user) {
+          try {
+            await db.upsert({
+              id: user.id,
+              name: user.name,
+              email: user.email,
+              accessToken: account.access_token,
+              refreshToken: account.refresh_token
+            });
+          } catch (error) {
+            console.error('Failed to store user in database:', error);
+          }
+        }
       }
       return token;
     },
     async session({ session, token }) {
       session.accessToken = token.accessToken;
       session.refreshToken = token.refreshToken;
+      
+      // Add user ID from database if needed
+      if (token.email) {
+        try {
+          const dbUser = await db.findByEmail(token.email);
+          if (dbUser) {
+            session.user.id = dbUser.id;
+          }
+        } catch (error) {
+          console.error('Failed to fetch user from database:', error);
+        }
+      }
+      
       return session;
     },
   },
