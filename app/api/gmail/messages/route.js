@@ -1,53 +1,36 @@
 import { getServerSession } from "next-auth";
 import { getGmailClient } from "@/lib/gmail";
-import { debugLog, logSession, logEnvVars } from "@/lib/debug";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 
 export async function GET() {
-  debugLog('=== Gmail Messages API Called ===');
-  
+  const session = await getServerSession(authOptions);
+
+  if (!session) {
+    return Response.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
+  console.log("Session found:", {
+    hasAccessToken: !!session.accessToken,
+    hasRefreshToken: !!session.refreshToken,
+    userEmail: session.user?.email
+  });
+
   try {
-    logEnvVars();
-    
-    const session = await getServerSession();
-    logSession(session);
-    
-    if (!session) {
-      debugLog('ERROR: No session found');
-      return Response.json({ error: "Not authenticated" }, { status: 401 });
-    }
-
-    if (!session.accessToken) {
-      debugLog('ERROR: No access token in session');
-      return Response.json({ error: "No access token available" }, { status: 401 });
-    }
-
-    debugLog('Creating Gmail client...');
     const gmail = getGmailClient(session.accessToken, session.refreshToken);
 
-    debugLog('Calling Gmail API...');
+    console.log("Making Gmail API call...");
     const res = await gmail.users.messages.list({
       userId: "me",
       maxResults: 10,
     });
 
-    debugLog('Gmail API response successful', {
-      messagesCount: res.data.messages?.length || 0,
-      hasNextPage: !!res.data.nextPageToken
-    });
-
+    console.log("Gmail API response:", res.data);
     return Response.json(res.data);
   } catch (error) {
-    debugLog('ERROR: Gmail API failed', {
-      message: error.message,
-      code: error.code,
-      status: error.status,
-      stack: error.stack
-    });
-    
+    console.error("Gmail API error:", error);
     return Response.json({ 
-      error: "Failed to fetch messages", 
+      error: "Gmail API failed", 
       details: error.message,
-      code: error.code,
       stack: error.stack 
     }, { status: 500 });
   }

@@ -1,7 +1,7 @@
 import NextAuth from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 
-const handler = NextAuth({
+export const authOptions = {
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID,
@@ -10,17 +10,13 @@ const handler = NextAuth({
         params: {
           scope: "openid email profile https://mail.google.com/",
           access_type: "offline",
-          prompt: "consent",
+          prompt: "select_account consent",
         },
       },
     }),
   ],
-  session: {
-    strategy: "jwt",
-  },
   callbacks: {
     async jwt({ token, account }) {
-      // Save tokens on first login
       if (account) {
         token.accessToken = account.access_token;
         token.refreshToken = account.refresh_token;
@@ -28,12 +24,13 @@ const handler = NextAuth({
       return token;
     },
     async session({ session, token }) {
-      // Make tokens available in session
       session.accessToken = token.accessToken;
       session.refreshToken = token.refreshToken;
       return session;
     },
   },
-});
+  secret: process.env.NEXTAUTH_SECRET,
+};
 
+const handler = NextAuth(authOptions);
 export { handler as GET, handler as POST };
