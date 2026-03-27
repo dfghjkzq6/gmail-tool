@@ -51,6 +51,30 @@ function extractName(from = "") {
   return match ? match[1].trim() : from.replace(/<.*?>/, "").trim() || from;
 }
 
+function getTokenStatusText(userId) {
+  const status = tokenStatuses[userId];
+  if (!status) return "⚠ No tokens";
+  
+  switch (status) {
+    case 'valid': return "✓ Authenticated";
+    case 'expired': return "⚠ Tokens expired";
+    case 'error': return "❌ Error";
+    default: return "⚠ Unknown status";
+  }
+}
+
+function getTokenStatusColor(userId) {
+  const status = tokenStatuses[userId];
+  if (!status) return "#ff3b30";
+  
+  switch (status) {
+    case 'valid': return "#34c759";
+    case 'expired': return "#ff9500";
+    case 'error': return "#ff3b30";
+    default: return "#8e8e93";
+  }
+}
+
 export default function AdminDashboard() {
   const { data: session } = useSession();
   const { t, mode, toggle } = useTheme();
@@ -62,6 +86,8 @@ export default function AdminDashboard() {
   const [messageDetail, setMessageDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [nextPageToken, setNextPageToken] = useState(null);
+  const [reauthNeeded, setReauthNeeded] = useState(null);
+  const [tokenStatuses, setTokenStatuses] = useState({});
 
   useEffect(() => {
     if (session) loadUsers();
@@ -77,6 +103,23 @@ export default function AdminDashboard() {
       const data = await res.json();
       console.log('Loaded users:', data);
       setUsers(data.users || []);
+      
+      // Check token status for all users
+      const statuses = {};
+      for (const user of data.users || []) {
+        if (user.hasTokens) {
+          try {
+            const statusRes = await fetch(`/api/users/${user.id}/token-status`);
+            const statusData = await statusRes.json();
+            statuses[user.id] = statusData.status;
+          } catch (error) {
+            console.error(`Failed to check token status for ${user.email}:`, error);
+            statuses[user.id] = 'error';
+          }
+        }
+      }
+      setTokenStatuses(statuses);
+      
       if (data.users?.length > 0 && !selectedUser) {
         // Find first user with a valid ID
         const validUser = data.users.find(user => user && user.id);
@@ -115,7 +158,7 @@ export default function AdminDashboard() {
       if (data.error) {
         console.error('API Error:', data.error);
         if (data.requiresReauth) {
-          alert(`User ${selectedUser.email} needs to re-authenticate. Please have them log in again.`);
+          setReauthNeeded(selectedUser);
         }
         return;
       }
@@ -155,6 +198,73 @@ export default function AdminDashboard() {
       setDetailLoading(false);
     }
   }
+
+  // Re-authentication component
+  const ReauthModal = () => {
+    if (!reauthNeeded) return null;
+    
+    return (
+      <div style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: "rgba(0,0,0,0.5)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 1000
+      }}>
+        <div style={{
+          background: t.card,
+          padding: "32px",
+          borderRadius: "16px",
+          maxWidth: "400px",
+          width: "90%",
+          border: `1px solid ${t.border}`,
+          textAlign: "center"
+        }}>
+          <div style={{ fontSize: "48px", marginBottom: "16px" }}>🔄</div>
+          <h3 style={{ margin: "0 0 16px", color: t.text, fontSize: "18px", fontWeight: "600" }}>
+            Re-authentication Required
+          </h3>
+          <p style={{ margin: "0 0 24px", color: t.sub, fontSize: "14px", lineHeight: "1.5" }}>
+            User <strong>{reauthNeeded.email}</strong> needs to re-authenticate with Gmail. 
+            Please have them sign in again to refresh their access tokens.
+          </p>
+          <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
+            <button onClick={() => setReauthNeeded(null)} style={{
+              background: t.inputBg,
+              border: `1px solid ${t.border}`,
+              borderRadius: "8px",
+              padding: "10px 20px",
+              fontSize: "14px",
+              cursor: "pointer",
+              color: t.text
+            }}>
+              Dismiss
+            </button>
+            <button onClick={() => {
+              window.open(`/`, '_blank');
+              setReauthNeeded(null);
+            }} style={{
+              background: t.accent,
+              border: "none",
+              borderRadius: "8px",
+              padding: "10px 20px",
+              fontSize: "14px",
+              cursor: "pointer",
+              color: "#fff",
+              fontWeight: "500"
+            }}>
+              Open Sign-in Page
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   if (!session) {
     return (
@@ -222,8 +332,8 @@ export default function AdminDashboard() {
                   <div style={{ fontSize: 12, color: t.sub, overflow: "hidden", textOverflow: "ellipsis" }}>
                     {user.email}
                   </div>
-                  <div style={{ fontSize: 11, color: user.hasTokens ? "#34c759" : "#ff3b30" }}>
-                    {user.hasTokens ? "✓ Authenticated" : "⚠ No tokens"}
+                  <div style={{ fontSize: 11, color: getTokenStatusColor(user.id), fontWeight: 500 }}>
+                    {getTokenStatusText(user.id)}
                   </div>
                 </div>
               </div>
@@ -359,6 +469,9 @@ export default function AdminDashboard() {
           )}
         </div>
       </div>
+      
+      {/* Re-authentication Modal */}
+      <ReauthModal />
     </div>
   );
 }

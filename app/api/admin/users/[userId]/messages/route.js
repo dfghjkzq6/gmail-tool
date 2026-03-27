@@ -1,4 +1,4 @@
-import { getGmailClient } from "@/lib/gmail";
+import { getGmailClient, refreshTokens } from "@/lib/gmail";
 import { db } from "@/lib/db";
 
 export async function GET(req, { params }) {
@@ -23,16 +23,6 @@ export async function GET(req, { params }) {
     const user = await db.findById(userId);
     console.log('Database query result:', user ? 'User found' : 'User not found');
     
-    if (user) {
-      console.log('User details:', {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        hasAccessToken: !!user.access_token,
-        hasRefreshToken: !!user.refresh_token
-      });
-    }
-    
     if (!user) {
       console.log('❌ User not found in database');
       
@@ -54,7 +44,21 @@ export async function GET(req, { params }) {
       return Response.json({ error: "User has no valid tokens" }, { status: 401 });
     }
 
-    const gmail = getGmailClient(user.access_token, user.refresh_token);
+    // Set up token refresh callback
+    let tokensUpdated = false;
+    const onTokenRefresh = async (newTokens) => {
+      console.log('🔄 Tokens refreshed, updating database...');
+      try {
+        await db.updateTokens(user.email, newTokens.access_token, newTokens.refresh_token);
+        tokensUpdated = true;
+        console.log('✅ Tokens updated in database');
+      } catch (error) {
+        console.error('❌ Failed to update tokens in database:', error);
+      }
+    };
+
+    // Create Gmail client with auto-refresh
+    const gmail = getGmailClient(user.access_token, user.refresh_token, onTokenRefresh);
 
     // Single full message fetch
     if (messageId) {
